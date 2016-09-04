@@ -36,7 +36,7 @@
 
 (defsynth record [buf default-buffer bus guitar-bus]
   (let [signal (in:ar bus)]
-    (record-buf:ar [signal] buf)))
+    (record-buf:ar [signal] buf :loop false)))
 
 (defsynth play [buf default-buffer]
   (out 0 (play-buf:ar 1 buf)))
@@ -163,7 +163,6 @@
 (stop)
 
 
-(record-buf:ar [0] guitar-loop)
 (play-buf 1 guitar-loop)
 
 (def distortion (inst-fx! guitar fx-distortion-tubescreamer))
@@ -178,17 +177,85 @@
 
 (stop)
 
+(def blips-5-4 (buffer (samples 5 4 180 4)))
+(def drum-1 (buffer (samples 5 4 180 4)))
+
+(defn begin [song]
+  (doseq [x song]))
+
+(defn then [& args]
+  (doseq [x args]
+    (do
+      (eval x))))
+
+(defmacro then [& args]
+  (let [x (gensym 'x)]
+    `(doseq [~x '~args]
+       (do
+         (eval ~x)
+         (Thread/sleep (duration (var-get (resolve (second ~x)))))
+         ))))
+
+(defmacro together [& args]
+  (let [x (gensym 'x)]
+    `(doseq [~x (quote ~args)]
+       (eval ~x))))
+
+(guitar)
+(duration `~(second `(play hello-world)))
+(play greetings)
+
+(duration (var-get (resolve 'hello-world)))
+(resolve 'hello-world)
+(duration ~(symbol (name (ns-name *ns*)) (name 'hello-world)))
+(symbol (name (ns-name *ns*)) (name 'hello-world))
+
+(then (play hello-world)
+      (play greetings))
+
+(together (play hello-world)
+          (play greetings))
+
+(record blips-5-4)
+(play blips-5-4)
+
+(macroexpand '(then (play blips-5-4)
+                    (record drum-1)))
+
+(macroexpand '(together (play blips-5-4)
+                        (record drum-1)))
+
+(defmacro both [& args])
+
+;; do we really want to Thread/sleep? Is it not better to use a metronome?
+;; let's see how it goes. I think metronomes could be a headache
+;; also: might want to do core.async/futures
+
+;; (macro-expand (then (play blips-5-4)
+;;                     (record drum-1)))
+;; (doseq [x '('(play blips-5-4) '(record drum-1))]
+;;   (do
+;;     (eval x)
+;;     (Thread/sleep (duration (second x)))))
+
+;; (macro-expand (both (play blips-5-4)
+;;                     (record drum-1)))
+;; (doseq [x '('play blips-5-4) '(record drum-1)]
+;;   (eval x))
+
 ;; sounds are in pre-sized buffers
 ;; this data structure describes a song:
 ;; (def mad-jam (then (play blips-5-4)
-;;                    (then (play blips-5-4 2)
+;;                    (both (play blips-5-4 2)
 ;;                          (record drum-1))
-;;                    (then (play drum-1)
+;;                    (both (play drum-1)
 ;;                          (record guitar-1))
-;;                    (then (play drum-1 2)
+;;                    (both (play drum-1 2)
 ;;                          (play guitar-1 2)
 ;;                          (then (record vox-1)
 ;;                                (record vox-2)))))
+
+;; these will need to be macros
 
 ;; this triggers/plays the song:
 ;; (begin mad-jam)
