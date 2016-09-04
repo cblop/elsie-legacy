@@ -38,8 +38,14 @@
   (let [signal (in:ar bus)]
     (record-buf:ar [signal] buf :loop false)))
 
-(defsynth play [buf default-buffer]
+(defsynth player [buf default-buffer]
   (out 0 (play-buf:ar 1 buf)))
+
+(defn play
+  ([buf] (player buf))
+  ([buf times] (doseq [i (range times)]
+                 (player buf)
+                 (if-not (= i (- times 1)) (Thread/sleep (duration buf))))))
 
 (defsynth pitch-monitor []
   (let [g (in:ar guitar-bus)
@@ -188,12 +194,13 @@
     (do
       (eval x))))
 
+;; Thread/sleep is not the best choice at all, but might be good enough for now
 (defmacro then [& args]
   (let [x (gensym 'x)]
     `(doseq [~x '~args]
        (do
          (eval ~x)
-         (Thread/sleep (duration (var-get (resolve (second ~x)))))
+         (if-not (= (name (first ~x)) "together") (Thread/sleep (duration (var-get (resolve (second ~x))))))
          ))))
 
 (defmacro together [& args]
@@ -210,11 +217,19 @@
 (duration ~(symbol (name (ns-name *ns*)) (name 'hello-world)))
 (symbol (name (ns-name *ns*)) (name 'hello-world))
 
-(then (play hello-world)
+(then (play hello-world 4)
       (play greetings))
+
+(then (play hello-world)
+      (together (play greetings)
+                (play hello-world)))
 
 (together (play hello-world)
           (play greetings))
+
+(together (play hello-world)
+          (then (play greetings)
+                (play hello-world)))
 
 (record blips-5-4)
 (play blips-5-4)
