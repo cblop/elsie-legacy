@@ -2,6 +2,7 @@
   (:require [overtone.live :refer :all]
             [quil.core :as q]))
 
+
 (definst guitar []
   (sound-in 1))
 
@@ -25,7 +26,8 @@
         samples-per-bar (* SRATE secs-per-bar)]
     (* bars samples-per-bar)))
 
-(def guitar-bus (audio-bus))
+(defonce guitar-bus (audio-bus))
+(defonce drum-bus (audio-bus))
 (def guitar-1 (buffer (samples 4 4 180 4)))
 
 (defsynth guitar []
@@ -38,8 +40,21 @@
   (let [signal (in:ar bus)]
     (record-buf:ar [signal] buf :loop false)))
 
-(defsynth player [buf default-buffer]
-  (out 0 (play-buf:ar 1 buf)))
+(defn duration [s]
+  (float (* 1000 (/ (num-frames s) SRATE))))
+
+(definst splayer
+  [note 60 level 1 rate 1 loop? 0 attack 0 decay 1 sustain 1 release 0.1 curve -4 gate 1]
+  (let [buf (index:kr (:id index-buffer) note)
+        env (env-gen (adsr attack decay sustain release level curve)
+                     :gate gate
+                     :action FREE)]
+    (* env (scaled-play-buf 2 buf :level level :loop loop? :action FREE))))
+
+
+(defsynth player [buf default-buffer bus 0]
+  (let [env (env-gen (asr 0 1 0) :action FREE)]
+    (out bus [(* (play-buf:ar 1 buf :action FREE) env) (* (play-buf:ar 1 buf :action FREE) env)])))
 
 (defn play
   ([buf] (player buf))
@@ -75,10 +90,48 @@
 (def hello-world (load-sample "sounds/hello-world.wav"))
 (def greetings (load-sample "sounds/greetings.wav"))
 
+(def kick (load-sample "sounds/Kickdrum10.wav"))
+(def open-hat (load-sample "sounds/OHH01.wav"))
+(def closed-hat (load-sample "sounds/CHH4.wav"))
+(def snare (load-sample "sounds/hs14.wav"))
+
+
+(def kick (sample "sounds/Kickdrum10.wav"))
+(def open-hat (sample "sounds/OHH01.wav"))
+(def closed-hat (sample "sounds/CHH4.wav"))
+(def snare (sample "sounds/hs14.wav"))
+
+(sample-player open-hat :release 0.1 :end 0.1)
+
+(player kick)
+(play open-hat)
+(play closed-hat)
+(play snare)
+
+(midi-connected-devices)
+
+;; (event-debug-on)
+(event-debug-off)
+
+(defsynth out-bus [in-bus 0]
+  ;; (out 0 (pan2 in-bus))
+  (out 0 in-bus)
+  )
+
+(on-event [:midi :note-on]
+          (fn [e]
+            (let [note (:note e)
+                  vel  (:velocity e)]
+              (case note
+                36 (player kick :bus drum-bus)
+                40 (player snare :bus drum-bus)
+                41 (player closed-hat :bus drum-bus)
+                37 (player open-hat :bus drum-bus)
+                "default")))
+          ::pad-handler)
+
 (def sounds {:E4 hello-world :B3 greetings})
 
-(defn duration [s]
-  (float (* 1000 (/ (num-frames s) SRATE))))
 
 (defn elsie [d]
   (while true
@@ -231,7 +284,7 @@
           (then (play greetings)
                 (play hello-world)))
 
-(record blips-5-4)
+(record blips-5-4 :bus 0)
 (play blips-5-4)
 
 (macroexpand '(then (play blips-5-4)
